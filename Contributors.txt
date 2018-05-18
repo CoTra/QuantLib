@@ -1,5 +1,5 @@
 
-We gratefully acknowledge contributions from:
+We gratefully acknowledge contributions from (in alphabetical order):
 
 Nathan Abbott
 Samad Abdessadki
@@ -8,6 +8,7 @@ Xavier Abulker
 Toyin Akin
 Marius Akre
 Mario Aleppo
+Ferdinando Ametrano
 Grzegorz Andruszkiewicz
 Driss Aouad
 Jose Aparicio
@@ -15,6 +16,7 @@ Sercan Atalik
 Ahmed Ayadi
 Lluis Pujol Bajador
 Gerardo Ballabio
+Luigi Ballabio
 Nabila Barkati
 Riccardo Barone
 Clément Barret
@@ -24,8 +26,10 @@ Michaël Benguigui
 Adolfo Benin
 Hachemi Benyahia
 Luca Berardi
+Nicholas Bertocchi
 Sylvain Bertrand
 Manas Bhatt
+Marco Bianchetti
 David Binderman
 Theo Boafo
 Francois Botha
@@ -34,6 +38,7 @@ Fakher Braham
 Joe Byers
 Xavier Caron
 Marine Casanova
+Peter Caspers
 Antoine Cellerier
 Yee Man Chan
 Aurelien Chanudet
@@ -42,10 +47,13 @@ Yanice Cherrak
 Meryem Chibo
 Warren Chou
 Scott Condit
+Marco Craveiro
 Jon Davidson
 Daniele De Francesco
 Frédéric Degraeve
 Piero Del Boca
+Mike DelMedico
+Nicolas Di Césaré
 Piter Dias
 Michael von den Driesch
 Francis Duffy
@@ -58,12 +66,15 @@ Matt Fair
 Paul Farrington
 Lorella Fatone
 Luca Ferraro
+Neil Firth
 Stefano Fondi
 Chiara Fornarola
 Silvia Frasson
 Andreas Gaida
 Matteo Gallivanoni
+Lakshay Garg
 Riccardo Ghetta
+Paul Giltinan
 Roman Gitlin
 Nick Glass
 Marek Glowacki
@@ -81,41 +92,54 @@ Andres Hernandez
 Chris Higgs
 Laurent Hoffmann
 Xiangyu Hong
+Guillaume Horel
 Benoît Houzelle
 Frank Hövermann
+Daniel Hrabovcak
 Shen Hui
 Charles Chongseok Hyun
 Simon Ibbotson
 Norbert Irmer
 Mike Jake
+Nicola Jean
+Joseph Jeisman
 Rahul Kanchi
 Andrey Karpov
 Michal Kaut
 Tomoya Kawanishi
 Gary Kennedy
+Chris Kenyon
+Oleksandr Khomenko
 Matt Knox
 Andrew Kolesnikov
 Silakhdar Krikeb
 Nathan Kruck
 Yan Kuang
+Werner Kuerzinger
+Oleg Kulkov
 Allen Kuo
 Paul Laderoute
 Yasmine Lahlou
+Alix Lassauzet
 Fabien Le Floc'h
 Fabrice Lecuyer
 James Lee
 Samuel Lerouge
 Bernd Lewerenz
+Patrick Lewis
 Cheng Li
 Gang Liang
+Roland Lichters
 Robert Lopez
 André Louw
+Matthias Lungwitz
 Jasen Mackie
 Joao Paulo Magalhaes
 Jose Magana
 Andrea Maggiulli
 John Maiden
 Katiuscia Manzoni
+Marco Marchioro
 Francesca Mariani
 Slava Mazur
 Paolo Mazzocchi
@@ -129,6 +153,7 @@ Dmitri Nesteruk
 Billy Ng
 Bojan Nikolic
 Jean Nkeng
+Robin Northcott
 Nikolai Nowaczyk
 Adrian O'Neill
 Andrea Odetti
@@ -154,6 +179,7 @@ Fabio Ramponi
 Maria Cristina Recchioni
 Dimitri Reiswich
 Sadruddin Rejeb
+Martin Ross
 Alessandro Roveda
 Mohamed Amine Sadaoui
 Amine Samani
@@ -169,23 +195,29 @@ Kirill Shemyakin
 Eugene Shevkoplyas
 Enrico Sirola
 Leon Sit
+Wojciech Slusarski
 Dale Smith
 Tim Smith
 Maxim Sokolov
 Niels Elken Sønderby
+Klaus Spanderen
 Andreas Spengler
 Roland Stamm
 Edouard Tallent
 Eisuke Tani
 Marco Tarenghi
+Ryan Taylor
 Yue Tian
 Jayanth R. Varma
 François du Vignaud
+Joseph Wang
 Qingxiao Wang
 Charles Whitmore
 Stephen Wong
+Krzysztof Wos
 Bernd Johannes Wuebben
 Sun Xiuxin
+Frank Xue
 Jeff Yu
 Maddalena Zanzi
 Francesco Zirilli

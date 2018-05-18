@@ -40,10 +40,10 @@
 #include <ql/pricingengines/vanilla/analyticeuropeanengine.hpp>
 #include <ql/pricingengines/vanilla/mchestonhullwhiteengine.hpp>
 #include <ql/methods/finitedifferences/finitedifferencemodel.hpp>
+#include <ql/math/matrixutilities/gmres.hpp>
 #include <ql/math/matrixutilities/bicgstab.hpp>
 #include <ql/methods/finitedifferences/schemes/douglasscheme.hpp>
 #include <ql/methods/finitedifferences/schemes/hundsdorferscheme.hpp>
-#include <ql/methods/finitedifferences/schemes/impliciteulerscheme.hpp>
 #include <ql/methods/finitedifferences/schemes/craigsneydscheme.hpp>
 #include <ql/methods/finitedifferences/meshers/uniformgridmesher.hpp>
 #include <ql/methods/finitedifferences/meshers/uniform1dmesher.hpp>
@@ -82,6 +82,9 @@
 #if defined(__GNUC__) && (((__GNUC__ == 4) && (__GNUC_MINOR__ >= 8)) || (__GNUC__ > 4))
 #pragma GCC diagnostic pop
 #endif
+
+#include <boost/make_shared.hpp>
+
 #include <numeric>
 
 using namespace QuantLib;
@@ -741,8 +744,8 @@ void FdmLinearOpTest::testTripleBandMapSolve() {
         }
     }
 
-    //check assigment operator
-    copyOfDxx = SecondDerivativeOp(1, mesher);
+    //check assignment operator
+    copyOfDxx.add(SecondDerivativeOp(1, mesher));
     copyOfDxx = dxx;
 
     t = dxx.solve_splitting(copyOfDxx.apply(u), 1.0, 0.0);
@@ -1248,41 +1251,87 @@ namespace {
         Array retVal(y.begin(), y.end());
         return retVal;
     }
+
+    boost::numeric::ublas::compressed_matrix<Real> createTestMatrix(
+        Size n, Size m, Real theta) {
+
+        boost::numeric::ublas::compressed_matrix<Real> a(n*m, n*m);
+
+        for (Size i=0; i < n; ++i) {
+            for (Size j=0; j < m; ++j) {
+                const Size k = i*m+j;
+                a(k,k)=1.0;
+
+                if (i > 0 && j > 0 && i <n-1 && j < m-1) {
+                    const Size im1 = i-1;
+                    const Size ip1 = i+1;
+                    const Size jm1 = j-1;
+                    const Size jp1 = j+1;
+                    const Real delta = theta/((ip1-im1)*(jp1-jm1));
+
+                    a(k,im1*m+jm1) =  delta;
+                    a(k,im1*m+jp1) = -delta;
+                    a(k,ip1*m+jm1) = -delta;
+                    a(k,ip1*m+jp1) =  delta;
+                }
+            }
+        }
+
+        return a;
+    }
 }
 #endif
 
-
 void FdmLinearOpTest::testBiCGstab() {
 #if !defined(QL_NO_UBLAS_SUPPORT)
-    BOOST_TEST_MESSAGE("Testing bi-conjugated gradient stabilized algorithm "
-                       "with Heston operator...");
+    BOOST_TEST_MESSAGE(
+        "Testing bi-conjugated gradient stabilized algorithm...");
 
     const Size n=41, m=21;
     const Real theta = 1.0;
-    boost::numeric::ublas::compressed_matrix<Real> a(n*m, n*m);
-    
-    for (Size i=0; i < n; ++i) {
-        for (Size j=0; j < m; ++j) {
-            const Size k = i*m+j;
-            a(k,k)=1.0;
+    const boost::numeric::ublas::compressed_matrix<Real> a
+        = createTestMatrix(n, m, theta);
 
-            if (i > 0 && j > 0 && i <n-1 && j < m-1) {
-                const Size im1 = i-1;
-                const Size ip1 = i+1;
-                const Size jm1 = j-1;
-                const Size jp1 = j+1;
-                const Real delta = theta/((ip1-im1)*(jp1-jm1));
+    const boost::function<Disposable<Array>(const Array&)> matmult(
+                                                boost::bind(&axpy, a, _1));
 
-                a(k,im1*m+jm1) =  delta;
-                a(k,im1*m+jp1) = -delta;
-                a(k,ip1*m+jm1) = -delta;
-                a(k,ip1*m+jp1) =  delta;
-            }
-        }
+    SparseILUPreconditioner ilu(a, 4);
+    boost::function<Disposable<Array>(const Array&)> precond(
+         boost::bind(&SparseILUPreconditioner::apply, &ilu, _1));
+
+    Array b(n*m);
+    MersenneTwisterUniformRng rng(1234);
+    for (Size i=0; i < b.size(); ++i) {
+        b[i] = rng.next().value;
     }
-    
-    boost::function<Disposable<Array>(const Array&)> matmult(
-                                                    boost::bind(&axpy, a, _1));
+
+    const Real tol = 1e-10;
+
+    const BiCGstab biCGstab(matmult, n*m, tol, precond);
+    const Array x = biCGstab.solve(b).x;
+
+    const Real error = std::sqrt(DotProduct(b-axpy(a, x),
+                                 b-axpy(a, x))/DotProduct(b,b));
+
+    if (error > tol) {
+        BOOST_FAIL("Error calculating the inverse using BiCGstab" <<
+                "\n tolerance:  " << tol <<
+                "\n error:      " << error);
+    }
+#endif
+}
+
+void FdmLinearOpTest::testGMRES() {
+#if !defined(QL_NO_UBLAS_SUPPORT)
+    BOOST_TEST_MESSAGE("Testing GMRES algorithm...");
+
+    const Size n=41, m=21;
+    const Real theta = 1.0;
+    const boost::numeric::ublas::compressed_matrix<Real> a
+        = createTestMatrix(n, m, theta);
+
+    const boost::function<Disposable<Array>(const Array&)> matmult(
+                                                boost::bind(&axpy, a, _1));
     
     SparseILUPreconditioner ilu(a, 4);
     boost::function<Disposable<Array>(const Array&)> precond(
@@ -1296,17 +1345,37 @@ void FdmLinearOpTest::testBiCGstab() {
 
     const Real tol = 1e-10;
 
-    const BiCGstab biCGstab(matmult, n*m, tol, precond);
-    const Array x = biCGstab.solve(b).x;
+    const GMRES gmres(matmult, n*m, tol, precond);
+    const GMRESResult result = gmres.solve(b, b);
+    const Array x = result.x;
+    const Real errorCalculated = result.errors.back();
 
     const Real error = std::sqrt(DotProduct(b-axpy(a, x), 
                                  b-axpy(a, x))/DotProduct(b,b));
 
     if (error > tol) {
-        BOOST_FAIL("Error calculating the inverse using BiCGstab" <<
+        BOOST_FAIL("Error calculating the inverse using GMRES" <<
                 "\n tolerance:  " << tol <<
                 "\n error:      " << error);
-    }  
+    }
+
+    if (std::fabs(error - errorCalculated) > 10*QL_EPSILON) {
+        BOOST_FAIL("Calculation if the error in GMRES went wrong" <<
+                "\n calculated: " << errorCalculated <<
+                "\n error:      " << error);
+
+    }
+
+    const GMRES gmresRestart(matmult, 5, tol, precond);
+    const GMRESResult resultRestart = gmresRestart.solveWithRestart(5, b, b);
+    const Real errorWithRestart = resultRestart.errors.back();
+
+    if (errorWithRestart > tol) {
+        BOOST_FAIL("Error calculating the inverse using "
+                "GMRES with restarts" <<
+                "\n tolerance:  " << tol <<
+                "\n error:      " << errorWithRestart);
+    }
 #endif
 }
 
@@ -1538,6 +1607,147 @@ void FdmLinearOpTest::testFdmMesherIntegral() {
     }
 }
 
+void FdmLinearOpTest::testHighInterestRateBlackScholesMesher() {
+    BOOST_TEST_MESSAGE("Testing Black-Scholes mesher in a "
+            "high interest rate scenario...");
+
+    SavedSettings backup;
+
+    const DayCounter dc = Actual365Fixed();
+    const Date today = Date(11, February, 2018);
+
+    const Real spot = 100;
+    const Rate r = 0.21;
+    const Rate q = 0.02;
+    const Volatility v = 0.25;
+
+    const boost::shared_ptr<GeneralizedBlackScholesProcess> process =
+        boost::make_shared<GeneralizedBlackScholesProcess>(
+            Handle<Quote>(boost::make_shared<SimpleQuote>(spot)),
+            Handle<YieldTermStructure>(flatRate(today, q, dc)),
+            Handle<YieldTermStructure>(flatRate(today, r, dc)),
+            Handle<BlackVolTermStructure>(flatVol(today, v, dc)));
+
+    const Size size = 10;
+    const Time maturity = 2.0;
+    const Real strike = 100;
+    const Real eps = 0.05;
+    const Real normInvEps = 1.64485363;
+    const Real scaleFactor = 2.5;
+
+    const std::vector<Real> loc = FdmBlackScholesMesher(
+        size, process, maturity, strike,
+        Null<Real>(), Null<Real>(), eps, scaleFactor).locations();
+
+    const Real calculatedMin = std::exp(loc.front());
+    const Real calculatedMax = std::exp(loc.back());
+
+    const Real minimum = spot
+        * std::exp(-normInvEps*scaleFactor*v*std::sqrt(maturity));
+    const Real maximum = spot
+        / process->riskFreeRate()->discount(maturity)
+        * process->dividendYield()->discount(maturity)
+        * std::exp( normInvEps*scaleFactor*v*std::sqrt(maturity));
+
+    const Real relTol = 1e-7;
+
+    const Real maxDiff = std::fabs(calculatedMax - maximum);
+    if (maxDiff > relTol*maximum) {
+        BOOST_FAIL("Upper bound for Black-Scholes mesher failed: "
+            << "\n    calculated: " << calculatedMax
+            << "\n    expected:   " << maximum
+            << std::scientific
+            << "\n    difference: " << maxDiff
+            << "\n    tolerance:  " << relTol*maximum);
+    }
+
+    const Real minDiff = std::fabs(calculatedMin - minimum);
+    if (minDiff > relTol*minimum) {
+        BOOST_FAIL("Lower bound for Black-Scholes mesher failed: "
+            << "\n    calculated: " << calculatedMin
+            << "\n    expected:   " << minimum
+            << std::scientific
+            << "\n    difference: " << minDiff
+            << "\n    tolerance:  " << relTol*minimum);
+    }
+}
+
+void FdmLinearOpTest::testLowVolatilityHighDiscreteDividendBlackScholesMesher() {
+    BOOST_TEST_MESSAGE("Testing Black-Scholes mesher in a low volatility and "
+            "high discrete dividend scenario...");
+
+    SavedSettings backup;
+
+    const DayCounter dc = Actual365Fixed();
+    const Date today = Date(28, January, 2018);
+
+    const Handle<Quote> spot(boost::make_shared<SimpleQuote>(100.0));
+    const Handle<YieldTermStructure> qTS(flatRate(today, 0.07, dc));
+    const Handle<YieldTermStructure> rTS(flatRate(today, 0.16, dc));
+    const Handle<BlackVolTermStructure> volTS(flatVol(today, 0.0, dc));
+
+    const boost::shared_ptr<GeneralizedBlackScholesProcess> process =
+        boost::make_shared<GeneralizedBlackScholesProcess>(
+            spot, qTS, rTS, volTS);
+
+    const Date firstDivDate = today + Period(7, Months);
+    const Real firstDivAmount = 10.0;
+    const Date secondDivDate = today + Period(11, Months);
+    const Real secondDivAmount = 5.0;
+
+    DividendSchedule divSchedule;
+    divSchedule.push_back(
+        boost::make_shared<FixedDividend>(firstDivAmount, firstDivDate));
+    divSchedule.push_back(
+        boost::make_shared<FixedDividend>(secondDivAmount, secondDivDate));
+
+    const Size size = 5;
+    const Time maturity = 1.0;
+    const Real strike = 100;
+    const Real eps = 0.0001;
+    const Real scaleFactor = 1.5;
+
+    const std::vector<Real> loc = FdmBlackScholesMesher(
+        size,
+        process,
+        maturity, strike,
+        Null<Real>(), Null<Real>(),
+        eps, scaleFactor,
+        std::make_pair(Null<Real>(), Null<Real>()),
+        divSchedule).locations();
+
+    const Real maximum = spot->value() *
+        qTS->discount(firstDivDate)/rTS->discount(firstDivDate);
+
+    const Real minimum = (1 - firstDivAmount
+        /(spot->value()*qTS->discount(firstDivDate)/rTS->discount(firstDivDate)))
+        * spot->value()*qTS->discount(secondDivDate)/rTS->discount(secondDivDate)
+         - secondDivAmount;
+
+    const Real calculatedMax = std::exp(loc.back());
+    const Real calculatedMin = std::exp(loc.front());
+
+
+    const Real relTol = 1e5*QL_EPSILON;
+
+    const Real maxDiff = std::fabs(calculatedMax - maximum);
+    if (maxDiff > relTol*maximum) {
+        BOOST_FAIL("Upper bound for Black-Scholes mesher failed: "
+            << "\n    calculated: " << calculatedMax
+            << "\n    expected:   " << maximum
+            << "\n    difference: " << maxDiff
+            << "\n    tolerance:  " << relTol*maximum);
+    }
+
+    const Real minDiff = std::fabs(calculatedMin - minimum);
+    if (minDiff > relTol*minimum) {
+        BOOST_FAIL("Lower bound for Black-Scholes mesher failed: "
+            << "\n    calculated: " << calculatedMin
+            << "\n    expected:   " << minimum
+            << "\n    difference: " << minDiff
+            << "\n    tolerance:  " << relTol*minimum);
+    }
+}
 
 test_suite* FdmLinearOpTest::suite() {
     test_suite* suite = BOOST_TEST_SUITE("linear operator tests");
@@ -1561,6 +1771,7 @@ test_suite* FdmLinearOpTest::suite() {
     suite->add(QUANTLIB_TEST_CASE(&FdmLinearOpTest::testFdmHestonExpress));
     suite->add(QUANTLIB_TEST_CASE(&FdmLinearOpTest::testFdmHestonHullWhiteOp));
     suite->add(QUANTLIB_TEST_CASE(&FdmLinearOpTest::testBiCGstab));
+    suite->add(QUANTLIB_TEST_CASE(&FdmLinearOpTest::testGMRES));
     suite->add(
         QUANTLIB_TEST_CASE(&FdmLinearOpTest::testCrankNicolsonWithDamping));
     suite->add(
@@ -1568,7 +1779,10 @@ test_suite* FdmLinearOpTest::suite() {
     suite->add(
         QUANTLIB_TEST_CASE(&FdmLinearOpTest::testSparseMatrixZeroAssignment));
     suite->add(QUANTLIB_TEST_CASE(&FdmLinearOpTest::testFdmMesherIntegral));
+    suite->add(QUANTLIB_TEST_CASE(
+        &FdmLinearOpTest::testHighInterestRateBlackScholesMesher));
+    suite->add(QUANTLIB_TEST_CASE(
+        &FdmLinearOpTest::testLowVolatilityHighDiscreteDividendBlackScholesMesher));
 
     return suite;
-    
 }

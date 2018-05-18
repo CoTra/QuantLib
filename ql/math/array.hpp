@@ -131,6 +131,7 @@ namespace QuantLib {
         //@}
         //! \name Utilities
         //@{
+        void resize(Size n);
         void swap(Array&);  // never throws
         //@}
 
@@ -151,6 +152,9 @@ namespace QuantLib {
 
     /*! \relates Array */
     Real DotProduct(const Array&, const Array&);
+
+    /*! \relates Array */
+    Real Norm2(const Array&);
 
     // unary operators
     /*! \relates Array */
@@ -217,7 +221,7 @@ namespace QuantLib {
 
     inline Array::Array(Size size, Real value, Real increment)
     : data_(size ? new Real[size] : (Real*)(0)), n_(size) {
-        for (iterator i=begin(); i!=end(); i++,value+=increment)
+        for (iterator i=begin(); i!=end(); ++i, value+=increment)
             *i = value;
     }
 
@@ -460,19 +464,34 @@ namespace QuantLib {
         return reverse_iterator(begin());
     }
 
+    inline void Array::resize(Size n) {
+        if (n > n_) {
+            Array swp(n);
+            std::copy(begin(), end(), swp.begin());
+            swap(swp);
+        }
+        else if (n < n_) {
+            n_ = n;
+        }
+    }
+
     inline void Array::swap(Array& from) {
         using std::swap;
         data_.swap(from.data_);
         swap(n_,from.n_);
     }
 
-    // dot product
+    // dot product and norm
 
     inline Real DotProduct(const Array& v1, const Array& v2) {
         QL_REQUIRE(v1.size() == v2.size(),
                    "arrays with different sizes (" << v1.size() << ", "
                    << v2.size() << ") cannot be multiplied");
         return std::inner_product(v1.begin(),v1.end(),v2.begin(),0.0);
+    }
+
+    inline Real Norm2(const Array& v) {
+        return std::sqrt(DotProduct(v, v));
     }
 
     // overloaded operators

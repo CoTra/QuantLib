@@ -47,8 +47,8 @@ namespace QuantLib {
                                       gridPoints, timeDependent) {}
       protected:
         virtual void setupArguments(const PricingEngine::arguments*) const;
-        void setGridLimits() const = 0;
-        void executeIntermediateStep(Size step) const = 0;
+        virtual void setGridLimits() const = 0;
+        virtual void executeIntermediateStep(Size step) const = 0;
         Real getDividendAmount(Size i) const {
             const Dividend *dividend =
                 dynamic_cast<const Dividend *>(this->events_[i].get());
@@ -199,9 +199,7 @@ namespace QuantLib {
           private:
             const Dividend *dividend;
           public:
-            DividendAdder (const Dividend *d) {
-                dividend = d;
-            }
+            explicit DividendAdder (const Dividend *d) : dividend(d) {}
             Real operator() (Real x) const {
                 return x + dividend->amount(x);
             }

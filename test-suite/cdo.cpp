@@ -37,12 +37,16 @@
 #include <ql/currencies/europe.hpp>
 
 #include <boost/bind.hpp>
+#include <boost/preprocessor/iteration/local.hpp>
+
 #include <iomanip>
 #include <iostream>
 
 using namespace QuantLib;
 using namespace std;
 using namespace boost::unit_test_framework;
+
+#ifndef QL_PATCH_SOLARIS
 
 namespace {
 
@@ -73,7 +77,7 @@ namespace {
         { 0.3,  5,  5, { 1713, 359, 136,  9 } }
     };
 
-    void check(int i, int j, string desc, Real found, Real expected,
+    void check(int i, int j, const string& desc, Real found, Real expected,
                Real bpTolerance, Real relativeTolerance) 
     {
         /* Uncomment to display the full show if your debugging:
@@ -90,7 +94,11 @@ namespace {
 
 }
 
+#endif
+
+
 void CdoTest::testHW(unsigned dataSet) {
+    #ifndef QL_PATCH_SOLARIS
 
     BOOST_TEST_MESSAGE ("Testing CDO premiums against Hull-White values"
                         " for data set " << dataSet << "...");
@@ -359,13 +367,20 @@ void CdoTest::testHW(unsigned dataSet) {
                 absoluteTolerance[im], relativeTolerancePeriod[im]);
         }
     }
+    #endif
 }
 
 
-test_suite* CdoTest::suite() {
+test_suite* CdoTest::suite(SpeedLevel speed) {
     test_suite* suite = BOOST_TEST_SUITE("CDO tests");
-    for (unsigned i=0; i < LENGTH(hwData7); ++i)
-        suite->add(QUANTLIB_TEST_CASE(
-            boost::bind(&CdoTest::testHW, i)));
+    #ifndef QL_PATCH_SOLARIS
+    if (speed == Slow) {
+        #define BOOST_PP_LOCAL_MACRO(n) \
+            suite->add(QUANTLIB_TEST_CASE(boost::bind(&CdoTest::testHW, n)));
+
+        #define BOOST_PP_LOCAL_LIMITS (0, 4)
+        #include BOOST_PP_LOCAL_ITERATE()
+    }
+    #endif
     return suite;
 }

@@ -22,10 +22,13 @@
 
 #include "matrices.hpp"
 #include "utilities.hpp"
+#include <ql/math/initializers.hpp>
 #include <ql/math/matrix.hpp>
 #include <ql/math/matrixutilities/choleskydecomposition.hpp>
 #include <ql/math/matrixutilities/pseudosqrt.hpp>
 #include <ql/math/matrixutilities/svd.hpp>
+#include <ql/math/matrixutilities/gmres.hpp>
+#include <ql/math/matrixutilities/bicgstab.hpp>
 #include <ql/math/matrixutilities/symmetricschurdecomposition.hpp>
 #include <ql/math/randomnumbers/mt19937uniformrng.hpp>
 #include <ql/math/matrixutilities/qrdecomposition.hpp>
@@ -352,16 +355,16 @@ void MatricesTest::testInverse() {
         const Matrix I1 = invA*A;
         const Matrix I2 = A*invA;
 
-        Matrix eins(A.rows(), A.rows(), 0.0);
-        for (Size i=0; i < A.rows(); ++i) eins[i][i] = 1.0;
+        Matrix identity(A.rows(), A.rows(), 0.0);
+        for (Size i=0; i < A.rows(); ++i) identity[i][i] = 1.0;
 
-        if (norm(I1 - eins) > tol)
+        if (norm(I1 - identity) > tol)
             BOOST_FAIL("inverse(A)*A does not recover unit matrix (norm = "
-                       << norm(I1-eins) << ")");
+                       << norm(I1-identity) << ")");
 
-        if (norm(I2 - eins) > tol)
+        if (norm(I2 - identity) > tol)
             BOOST_FAIL("A*inverse(A) does not recover unit matrix (norm = "
-                       << norm(I1-eins) << ")");
+                       << norm(I1-identity) << ")");
     }
 }
 
@@ -556,6 +559,9 @@ void MatricesTest::testCholeskyDecomposition() {
 }
 
 void MatricesTest::testMoorePenroseInverse() {
+
+    BOOST_TEST_MESSAGE("Testing Moore-Penrose inverse...");
+
     // this is taken from
     // http://de.mathworks.com/help/matlab/ref/pinv.html
     Real tmp[8][6] = {{64, 2, 3, 61, 60, 6},    {9, 55, 54, 12, 13, 51},
@@ -588,7 +594,7 @@ void MatricesTest::testMoorePenroseInverse() {
     }
 
     Array y = A*x;
-    Real tol2 = 1000.0 * QL_EPSILON;
+    Real tol2 = 2000.0 * QL_EPSILON;
     for (Size i = 0; i < 6; ++i) {
         if (std::abs(y[i] - 260.0) > tol2) {
             BOOST_FAIL(
@@ -599,6 +605,136 @@ void MatricesTest::testMoorePenroseInverse() {
         }
     }
 
+}
+
+namespace {
+    class MatrixMult :
+        public std::unary_function<const Array&, Disposable<Array> > {
+      public:
+        explicit MatrixMult(const Matrix& m) : m_(m) {}
+        Disposable<Array> operator()(const Array& x) const {
+            Array retVal = m_*x;
+            return retVal;
+        }
+
+      private:
+        const Matrix m_;
+    };
+
+    Real norm2(const Array& x) {
+        return std::sqrt(DotProduct(x,x));
+    }
+}
+
+void MatricesTest::testIterativeSolvers() {
+    BOOST_TEST_MESSAGE("Testing iterative solvers...");
+
+    setup();
+
+    Array b(3);
+    b[0] = 1.0; b[1] = 0.5; b[2] = 3.0;
+
+    const Real relTol = 1e4*QL_EPSILON;
+
+    const Array x = BiCGstab(MatrixMult(M1), 3, relTol).solve(b).x;
+    if (norm2(M1*x-b)/norm2(b) > relTol) {
+        BOOST_FAIL("Failed to calculate inverse using BiCGstab"
+                << "\n  rel error     : " << norm2(M1*x-b)/norm2(b)
+                << "\n  rel tolerance : " << relTol);
+    }
+
+    const GMRESResult u = GMRES(MatrixMult(M1), 3, relTol).solve(b, b);
+    if (norm2(M1*u.x-b)/norm2(b) > relTol) {
+        BOOST_FAIL("Failed to calculate inverse using gmres"
+                << "\n  rel error     : " << norm2(M1*u.x-b)/norm2(b)
+                << "\n  rel tolerance : " << relTol);
+    }
+    const Array errors = Array(u.errors.begin(), u.errors.end());
+    for (Size i=0; i < errors.size(); ++i) {
+        const Array x = GMRES(MatrixMult(M1), 10, 1.01*errors[i]).solve(b, b).x;
+
+        const Real calculated = norm2(M1*x-b)/norm2(b);
+        const Real expected = errors[i];
+
+        if (std::fabs(calculated - expected) > relTol) {
+            BOOST_FAIL("Failed to calculate solution error"
+                    << "\n  calculated error: " << calculated
+                    << "\n  expected error  : " << expected);
+        }
+    }
+
+    #if !defined(QL_NO_UBLAS_SUPPORT)
+    const Array v = GMRES(MatrixMult(M1), 1, relTol,
+        MatrixMult(inverse(M1))).solve(b, b).x;
+
+    if (norm2(M1*v-b)/norm2(b) > relTol) {
+        BOOST_FAIL("Failed to calculate inverse using gmres "
+                   "with exact preconditioning"
+                << "\n  rel error     : " << norm2(M1*v-b)/norm2(b)
+                << "\n  rel tolerance : " << relTol);
+    }
+
+    const Array w = GMRES(MatrixMult(M1), 3, relTol,
+        MatrixMult(M1)).solve(b, b).x;
+    if (norm2(M1*w-b)/norm2(b) > relTol) {
+        BOOST_FAIL("Failed to calculate inverse using gmres "
+                   "with nonsense preconditioning"
+                << "\n  rel error     : " << norm2(M1*w-b)/norm2(b)
+                << "\n  rel tolerance : " << relTol);
+    }
+    #endif
+}
+
+void MatricesTest::testInitializers() {
+    BOOST_TEST_MESSAGE("Testing matrix and array initializers...");
+
+    Array a1(0);
+    BOOST_CHECK_THROW({ a1 << 1.0; }, QuantLib::Error);
+
+    Array a2(1);
+    BOOST_CHECK_NO_THROW({ a2 << 1.0; });
+    // the macro doesn't work on VC++ when the code contains commas
+    try {
+        a2 << 1.0, 2.0;
+        QL_FAIL("failed to throw the expected exception");
+    } catch(QuantLib::Error&) {}
+
+    Array a3(1);
+    a3 << 1.0;
+    BOOST_REQUIRE(a3.size() == 1);
+    BOOST_CHECK_EQUAL(a3[0], 1.0);
+
+    Array a4(5);
+    a4 << 1.0, 2.2, 3.3, 4.4, 5.5;
+    BOOST_REQUIRE(a4.size() == 5);
+    BOOST_CHECK_EQUAL(a4[0], 1.0);
+    BOOST_CHECK_EQUAL(a4[1], 2.2);
+    BOOST_CHECK_EQUAL(a4[2], 3.3);
+    BOOST_CHECK_EQUAL(a4[3], 4.4);
+    BOOST_CHECK_EQUAL(a4[4], 5.5);
+
+    Matrix m1(0, 0);
+    BOOST_CHECK_THROW({ m1 << 1.0; }, QuantLib::Error);
+
+    Matrix m2(2, 2);
+    m2 << 1.0, 2.0,
+          3.0, 4.0;
+    // see above
+    try {
+        m2 << 1.0, 2.0, 3.0,
+              4.0, 5.0, 6.0,
+              7.0, 8.0, 9.0;
+    } catch (QuantLib::Error&) {}
+
+    Matrix m3(2,2);
+    m3 << 1.0, 2.0,
+          3.0, 4.0;
+    BOOST_REQUIRE(m3.rows() == 2);
+    BOOST_REQUIRE(m3.columns() == 2);
+    BOOST_CHECK_EQUAL(m3(0, 0), 1.0);
+    BOOST_CHECK_EQUAL(m3(0, 1), 2.0);
+    BOOST_CHECK_EQUAL(m3(1, 0), 3.0);
+    BOOST_CHECK_EQUAL(m3(1, 1), 4.0);
 }
 
 test_suite* MatricesTest::suite() {
@@ -617,6 +753,8 @@ test_suite* MatricesTest::suite() {
     #endif
     suite->add(QUANTLIB_TEST_CASE(&MatricesTest::testCholeskyDecomposition));
     suite->add(QUANTLIB_TEST_CASE(&MatricesTest::testMoorePenroseInverse));
+    suite->add(QUANTLIB_TEST_CASE(&MatricesTest::testIterativeSolvers));
+    suite->add(QUANTLIB_TEST_CASE(&MatricesTest::testInitializers));
     return suite;
 }
 

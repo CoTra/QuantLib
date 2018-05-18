@@ -2,7 +2,7 @@
 
 /*
  Copyright (C) 2000, 2001, 2002, 2003 RiskMap srl
- Copyright (C) 2001, 2002, 2003 Nicolas Di Césaré
+ Copyright (C) 2001, 2002, 2003 Nicolas Di CÃ©sarÃ©
  Copyright (C) 2004, 2008, 2009, 2011 Ferdinando Ametrano
  Copyright (C) 2009 Sylvain Bertrand
  Copyright (C) 2013 Peter Caspers
@@ -40,7 +40,7 @@ namespace QuantLib {
 
         class CoefficientHolder {
           public:
-            CoefficientHolder(Size n)
+            explicit CoefficientHolder(Size n)
             : n_(n), primitiveConst_(n-1), a_(n-1), b_(n-1), c_(n-1),
               monotonicityAdjustments_(n) {}
             virtual ~CoefficientHolder() {}
@@ -289,7 +289,7 @@ namespace QuantLib {
                             const I1& xEnd,
                             const I2& yBegin)
         : CubicInterpolation(xBegin, xEnd, yBegin,
-                             FritschButland, false,
+                             FritschButland, true,
                              SecondDerivative, 0.0,
                              SecondDerivative, 0.0) {}
     };
@@ -575,7 +575,16 @@ namespace QuantLib {
                                 for (Size i=1; i<n_-1; ++i) {
                                     Real Smin = std::min(S_[i-1], S_[i]);
                                     Real Smax = std::max(S_[i-1], S_[i]);
-                                    tmp_[i] = 3.0*Smin*Smax/(Smax+2.0*Smin);
+                                    if(Smax+2.0*Smin == 0){
+                                        if (Smin*Smax < 0)
+                                            tmp_[i] = QL_MIN_REAL;
+                                        else if (Smin*Smax == 0)
+                                            tmp_[i] = 0;
+                                        else
+                                            tmp_[i] = QL_MAX_REAL;
+                                    }
+                                    else
+                                        tmp_[i] = 3.0*Smin*Smax/(Smax+2.0*Smin);
                                 }
                                 // end points
                                 tmp_[0]    = ((2.0*dx_[   0]+dx_[   1])*S_[   0] - dx_[   0]*S_[   1]) / (dx_[   0]+dx_[   1]);

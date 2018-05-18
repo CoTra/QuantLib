@@ -180,7 +180,7 @@ void CapFloorTest::testVega() {
                                 "\n   lengths:     " << lengths[j]*Years <<
                                 "\n   strike:      " << io::rate(strikes[k]) <<
                                 //"\n   types:       " << types[h] <<
-                                QL_FIXED << std::setprecision(12) <<
+                                std::fixed << std::setprecision(12) <<
                                 "\n   calculated:  " << analyticalVega <<
                                 "\n   expected:    " << numericalVega <<
                                 "\n   discrepancy: " << io::rate(discrepancy) <<
@@ -612,7 +612,7 @@ void CapFloorTest::testCachedValue() {
 
 
 test_suite* CapFloorTest::suite() {
-    test_suite* suite = BOOST_TEST_SUITE("Cap/floor tests");
+    test_suite* suite = BOOST_TEST_SUITE("Cap and floor tests");
     suite->add(QUANTLIB_TEST_CASE(&CapFloorTest::testStrikeDependency));
     suite->add(QUANTLIB_TEST_CASE(&CapFloorTest::testConsistency));
     // FLOATING_POINT_EXCEPTION
